@@ -1,30 +1,15 @@
 # Architecture
 
-## Purpose
+The library is split into three main components:
 
-`github.com/Trysac/u275-dotenv-schema` is a small, dependency-free Go library: Validate .env files against a JSON schema in Go: strict dotenv parsing, typed rules for int, bool, enum, url, duration and pattern, secret-safe messages and a generated .env.example
+- **Parser** (`dotenv.go`): strict, line-oriented parser with limits on total size, line count, and individual value length. It returns `Entry` values with line numbers for accurate diagnostics.
+- **Schema loader** (`schema.go`): reads and validates a JSON schema, compiling regex patterns and checking defaults. The schema is stored with compiled regexes in an unexported field to avoid recompilation.
+- **Validator** (`schema.go`): compares entries against the schema, producing a sorted `[]Issue`. Issues never include values, and messages use a fixed format.
 
-## Shape
+The CLI (`cli.go`, `cmd/dotenv-schema`) wraps these components, reading from files or stdin and formatting output either line-by-line or as JSON.
 
-```text
-caller code --> package dotenvschema (repository root)
-                    |
-                    +-- pure functions, no I/O, no global mutable state
-                    +-- internal/ (optional private helpers)
-```
+## Design decisions
 
-- **Public API**: every exported identifier of the root package. Unexported identifiers and
-  `internal/` packages may change without a major version.
-- **Errors**: invalid input returns an error; exported sentinel errors (such as `ErrBlank`) let
-  callers branch with `errors.Is`. The library never panics on input, prints or exits.
-- **Side effects**: none. If a feature needs I/O, accept an interface (`io.Reader` or a small
-  custom one) instead of opening resources, and record the choice in an ADR.
-
-## Quality contract
-
-`scripts/check` is the single definition of the gates; `fabrica.json` tells the factory and CI
-how to run it. See [TESTING.md](TESTING.md).
-
-## Decisions
-
-Architecture decisions are recorded in [decisions/](decisions/) as numbered ADRs.
+- **No variable expansion**: the dotenv grammar is deliberately strict and does not perform shell-like expansion. This keeps parsing predictable and avoids security issues with untrusted input.
+- **Secret safety**: validation messages include only keys, never values, and the `Secret` flag further suppresses defaults in generated examples.
+- **Limits**: every input has an explicit size limit; parsers return a typed error when exceeded.
